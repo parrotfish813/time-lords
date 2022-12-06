@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       Time Lords
- * Description:       Ever wondered how much time you spend working on a given website. Well wonder no more!
+ * Description:       Ever found it hard to track how long you spend on a given Wordpress project? Well all you have to do now is clock in and out in the plugins menu and it will keep track of your hours for you. On top of that you can then enter in your hourly rates to determine how much it cost to make the website!
  * Version:           1.0.0
  * Requires at least: 5.2
  * Requires PHP:      8.1
