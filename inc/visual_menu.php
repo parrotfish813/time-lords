@@ -1,3 +1,10 @@
+<?php
+//If someone is trying to access the plugin files without permission, kill the plugin
+if(!defined('ABSPATH')) {
+    die;
+}
+?>
+
 <style type="text/css">
     .form-box {
         margin: 20px auto;
@@ -30,13 +37,14 @@
 
 <?php
 
-//If someone is trying to access the plugin files without permission, kill the plugin
-if(!defined('ABSPATH')) {
-    die;
-}
-
 $timeLogs = fopen ("timeLogs.txt", "a");
 $hourLogs = fopen ("hourLogs.txt", "a");
+$inHiddenLog = fopen ("inHiddenLog.txt", "a");
+$inHiddenLogD = fopen ("inHiddenLogD.txt", "a");
+$outHiddenLog = fopen ("outHiddenLog.txt", "a");
+$outHiddenLogD = fopen ("outHiddenLogD.txt", "a");
+$totalHiddenLog = fopen ("totalHiddenLog.txt", "a");
+$totalHidden = fopen ("totalHidden.txt", "a");
 
 $mydate = getdate(date("U"));
 date_default_timezone_set("America/New_York");
@@ -75,70 +83,88 @@ function myplugin_form() {
     <?php
 }
 
-//write clock in time to file
-function clockIn () {
+//write clock in and out time to file
+function clock () {
     if (array_key_exists ('ClockIn', $_POST)) {
-        $clockInTimeD = strftime("%B %d %Y: %X %Z");
-        $clockInTime = microtime(true);
+        $clockInTimeD = strftime ("%B %d %Y: %X %Z");
+        $clockInTime = microtime (true);
 
-        echo '<p class="message-box">Clocked in at: ' . $clockInTimeD . '.</p>';
+        echo '<p class="message-box">Clocked in at: '. $clockInTimeD .'.</p>';
 
         file_put_contents ("timeLogs.txt", "In: $clockInTimeD\n", FILE_APPEND);
+        file_put_contents ("inHiddenLog.txt", "$clockInTime\n", FILE_APPEND);
+        file_put_contents ("inHiddenLogD.txt", "$clockInTimeD\n", FILE_APPEND);
     }
-}
 
-//write clock out time to file
-function clockOut () {
     if (array_key_exists ('ClockOut', $_POST)) {
         $clockOutTimeD = strftime("%B %d %Y: %X %Z");
         $clockOutTime = microtime(true);
 
-        echo '<p class="message-box">Clocked out at: ' . $clockOutTimeD . '.</p>';
+        echo '<p class="message-box">Clocked out at: '. $clockOutTimeD .'.</p>';
 
         file_put_contents ("timeLogs.txt", "Out: $clockOutTimeD\n\n", FILE_APPEND);
+        file_put_contents ("outHiddenLog.txt", "$clockOutTime\n", FILE_APPEND);
+        file_put_contents ("outHiddenLogD.txt", "$clockOutTimeD\n", FILE_APPEND);
     }
 }
-
 
 //keep project hour logs
+//keep project hour logs
 function projHours () {
-    global $clockInTimeD, $clockOutTimeD, $totalHours, $diff, $clockInTime, $clockOutTime;
     if (array_key_exists ('ClockOut', $_POST)) {
-        $diff = $clockInTime - $clockOutTime;
-        $totalHours += $diff;
+        $clockInTime = file_get_contents ("inHiddenLog.txt");
+        $clockInTimeD = file_get_contents ("inHiddenLogD.txt");
+        $clockOutTime = file_get_contents ("outHiddenLog.txt");
+        $clockOutTimeD = file_get_contents ("outHiddenLogD.txt");
 
-        file_put_contents ("hourLogs.txt", "Total hours worked from $clockInTimeD to $clockOutTimeD: $diff hours\n", FILE_APPEND);
-        file_put_contents ("hourLogs.txt", "Total hours worked on project: $totalHours hours\n\n", FILE_APPEND);
-    }
-}
+        $diff = (int) $clockOutTime - (int) $clockInTime;
+        $totalHours = ($diff + (int) file_get_contents ("totalHiddenLog.txt")) / 3600;
+        unlink ("totalHiddenLog.txt");
+        file_put_contents ("totalHiddenLog.txt", $totalHours, FILE_APPEND);
+        $hours = (int) ($diff / 60 / 60);
+        $minutes = (int) ($diff / 60) - $hours * 60;
+        $seconds = (int) $diff - $hours * 60 * 60 - $minutes * 60;
 
-//calculate total project cost
-function projCost () {
-    global $rate, $totalHours;
-    if (array_key_exists ('ProjCost', $_POST)) {
-        if (!empty ($rate)) {
-            $cost = $rate * $totalHours;
-            echo '<p class="message-box">The total cost of this website is: ' . $cost . '.</p>';
+        if ($hours >= 1) {
+            file_put_contents ("hourLogs.txt", "Total hours worked from $clockInTimeD to $clockOutTimeD: $hours hours, $minutes minutes, $seconds seconds\n\n", FILE_APPEND);
+        } else if ($minutes >= 1) {
+            file_put_contents ("hourLogs.txt", "Total hours worked from $clockInTimeD to $clockOutTimeD: $minutes minutes, $seconds seconds\n\n", FILE_APPEND);
+        } else {
+            file_put_contents ("hourLogs.txt", "Total time worked from $clockInTimeD to $clockOutTimeD: $seconds seconds\n\n", FILE_APPEND);
         }
+
+        file_put_contents ("hourLogs.txt", "Total hours worked on project: $totalHours hours\n\n", FILE_APPEND);
+
+        unlink ("inHiddenLog.txt");
+        unlink ("inHiddenLogD.txt");
+        unlink ("outHiddenLog.txt");
+        unlink ("outHiddenLogD.txt");
+        unlink ("totalHidden.txt");
+        file_put_contents ("totalHidden.txt", $totalHours, FILE_APPEND);
+    }
+
+    if (array_key_exists ('ProjCost', $_POST)) {
+        $rate = $_POST ['rate'];
+        $totalHours = file_get_contents ("totalHidden.txt");
+        $cost = (int) $rate * (int) $totalHours;
+
+        echo '<p class="message-box">The total cost of this project is: $'. $cost .'</p>';
     }
 }
 
 //Executes all of the above functions
 function timelords_display_settings_page() {
-//Check's if user has access
-if(!current_user_can('manage_options')) {
-    return;
-}
-?>
-<div class="wrap">
-    <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-    <?php
-        myplugin_form();
-        global $clockInTimeD, $clockOutTimeD, $totalHours, $diff, $clockInTime, $clockOutTime;
-        clockIn();
-        clockOut();
-        projHours();
-        projCost();
+    //Check's if user has access
+    if(!current_user_can('manage_options')) {
+        return;
     }
+    ?>
+    <div class="wrap">
+        <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+        <?php
+        myplugin_form();
+        clock();
+        projHours();
+}
 
 ?>
